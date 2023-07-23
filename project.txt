@@ -1,0 +1,122 @@
+#include <Wire.h>
+#include <MPU6050.h>
+#include <Ultrasonic.h>
+MPU6050 mpu;
+int16_t accel_x, accel_y, accel_z;
+int16_t gyro_x, gyro_y, gyro_z;
+int16_t accel_x_bias, accel_y_bias, accel_z_bias;
+int16_t gyro_x_bias, gyro_y_bias, gyro_z_bias;
+const int calibration_iterations = 1000; // Number of iterations for calibration
+const int crash_threshold = 15000; // Threshold for crash detection
+#define TRIGGER_PIN D5
+#define ECHO_PIN D6
+
+// define the pin for the buzzer
+#define BUZZER_PIN D3
+// create an Ultrasonic object to interface with the sensor
+Ultrasonic ultrasonic(TRIGGER_PIN, ECHO_PIN);
+// initializes or defines the output pin of the LM35 temperature sensor
+int outputpin = A0;
+void setup() {
+// set up the buzzer pin as an output
+pinMode(BUZZER_PIN, OUTPUT);
+Serial.begin(9600);
+Wire.begin();
+mpu.initialize();
+// Wait for the MPU-6050 to stabilize
+delay(1000);
+
+// Calculate accelerometer bias values
+int32_t accel_x_sum = 0;
+int32_t accel_y_sum = 0;
+int32_t accel_z_sum = 0;
+for (int i = 0; i < calibration_iterations; i++) {
+mpu.getAcceleration(&accel_x, &accel_y, &accel_z);
+accel_x_sum += accel_x;
+accel_y_sum += accel_y;
+accel_z_sum += accel_z;
+delay(5);
+}
+accel_x_bias = accel_x_sum / calibration_iterations;
+accel_y_bias = accel_y_sum / calibration_iterations;
+accel_z_bias = accel_z_sum / calibration_iterations;
+// Calculate gyroscope bias values
+int32_t gyro_x_sum = 0;
+
+int32_t gyro_y_sum = 0;
+int32_t gyro_z_sum = 0;
+for (int i = 0; i < calibration_iterations; i++) {
+mpu.getRotation(&gyro_x, &gyro_y, &gyro_z);
+gyro_x_sum += gyro_x;
+gyro_y_sum += gyro_y;
+gyro_z_sum += gyro_z;
+delay(5);
+}
+gyro_x_bias = gyro_x_sum / calibration_iterations;
+gyro_y_bias = gyro_y_sum / calibration_iterations;
+gyro_z_bias = gyro_z_sum / calibration_iterations;
+Serial.print("Calibrated");
+}
+void loop() {
+int distance = ultrasonic.read();
+
+// print the distance to the serial monitor
+// Serial.print("Distance: ");
+// Serial.print(distance);
+// Serial.println(" cm");
+// check if the distance is less than 10 cm
+if (distance < 10) {
+// turn on the buzzer
+tone(BUZZER_PIN, 500);
+} else {
+// turn off the buzzer
+noTone(BUZZER_PIN);
+}
+// Read raw sensor data
+mpu.getAcceleration(&accel_x, &accel_y, &accel_z);
+mpu.getRotation(&gyro_x, &gyro_y, &gyro_z);
+
+// Subtract bias values from sensor data
+accel_x -= accel_x_bias;
+accel_y -= accel_y_bias;
+accel_z -= accel_z_bias;
+gyro_x -= gyro_x_bias;
+gyro_y -= gyro_y_bias;
+gyro_z -= gyro_z_bias;
+// Calculate total acceleration
+float total_accel = sqrt(accel_x * accel_x + accel_y * accel_y + accel_z *
+accel_z);
+// Detect crashes
+if (total_accel > crash_threshold) {
+Serial.println("Crash detected!");
+// Perform crash recovery here
+}
+// Print sensor data
+
+// Serial.print("Accelerometer: ");
+// Serial.print(accel_x);
+// Serial.print(", ");
+// Serial.print(accel_y);
+// Serial.print(", ");
+// Serial.print(accel_z);
+// Serial.print(" ");
+// Serial.print("Gyroscope: ");
+// Serial.print(gyro_x);
+// Serial.print(", ");
+// Serial.print(gyro_y);
+// Serial.print(", ");
+// Serial.print(gyro_z);
+// Serial.println();
+int analogValue = analogRead(outputpin);
+
+float millivolts = (analogValue / 1024.0) * 3300; //3300 is the voltage provided
+by NodeMCU
+float celsius = millivolts / 10;
+// Serial.print("in DegreeC= ");
+// Serial.println(celsius);
+//---------- Here is the calculation for Fahrenheit ----------//
+float fahrenheit = ((celsius * 9) / 5 + 32);
+Serial.print("Farenheit= ");
+Serial.println(fahrenheit);
+delay(500);
+}
